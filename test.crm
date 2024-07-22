@@ -1,0 +1,4 @@
+const x: int64 = 32 + 8 + 7;
+const z: int64 = x;
+
+exit(z);
