@@ -1,4 +1,4 @@
-const x: int64 = 32 + 8 + 7;
-const z: int64 = x;
+const x: int64 = 32;
+const z: int64 = x + 8;
 
-exit(z);
+exit(2 + z);
