@@ -37,6 +37,10 @@ public:
                 offset << "QWORD [rsp + " << (generator->m_stack_pointer - variable.stack_location) * 8 << "]";
                 code_stream << generator->push_stack(offset.str());
             }
+
+            void operator() (const Node::TermExpr *expression_term) const {
+                code_stream << generator->generate_expression(expression_term->expr);
+            }
         };
         std::stringstream code;
         ExpressionVisitor visitor{.code_stream = code, .generator = this};
@@ -60,18 +64,30 @@ public:
             }
 
             void operator() (const Node::BinSubtract *binary_subtract) const {
-                std::cerr << "cer: operator no implemented yet lol" << std::endl;
-                exit(EXIT_FAILURE);
+                code_stream << generator->generate_expression(binary_subtract->left_side);
+                code_stream << generator->generate_expression(binary_subtract->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\tsub rax, rbx\n";
+                code_stream << generator->push_stack("rax");
             }
 
             void operator() (const Node::BinMultiply *binary_multiply) const {
-                std::cerr << "cer: operator no implemented yet lol" << std::endl;
-                exit(EXIT_FAILURE);
+                code_stream << generator->generate_expression(binary_multiply->left_side);
+                code_stream << generator->generate_expression(binary_multiply->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\tmul rbx\n";
+                code_stream << generator->push_stack("rax");
             }
 
             void operator() (const Node::BinDivide *binary_divide) const {
-                std::cerr << "cer: operator no implemented yet lol" << std::endl;
-                exit(EXIT_FAILURE);
+                code_stream << generator->generate_expression(binary_divide->left_side);
+                code_stream << generator->generate_expression(binary_divide->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\tdiv rbx\n";
+                code_stream << generator->push_stack("rax");
             }
         };
         std::stringstream code;

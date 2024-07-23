@@ -11,7 +11,7 @@
 
 
 namespace Node {
-    struct BinExpr;
+    struct Expression;
 
     struct TermInt {
         Token int_lit;
@@ -21,12 +21,12 @@ namespace Node {
         Token identifier;
     };
 
-    struct Term {
-        std::variant<TermInt*, TermIdent*> var;
+    struct TermExpr {
+        Expression *expr;
     };
 
-    struct Expression {
-        std::variant<Term*, BinExpr*> var;
+    struct Term {
+        std::variant<TermInt*, TermIdent*, TermExpr*> var;
     };
 
     struct BinAdd {
@@ -51,6 +51,10 @@ namespace Node {
 
     struct BinExpr {
         std::variant<BinAdd*, BinSubtract*, BinMultiply*, BinDivide*> bin_expr;
+    };
+
+    struct Expression {
+        std::variant<Term*, BinExpr*> var;
     };
 
     struct StmtExit {
@@ -79,55 +83,75 @@ class Parser {
 
         std::optional<Node::Term*> parse_term() {
             if (auto int_lit = try_grab(TokenType::int_lit)) {
-                auto expression_int = m_allocator.alloc<Node::TermInt>();
-                expression_int->int_lit = int_lit.value();
+                auto int_term = m_allocator.alloc<Node::TermInt>();
+                int_term->int_lit = int_lit.value();
                 auto term = m_allocator.alloc<Node::Term>();
-                term->var = expression_int;
+                term->var = int_term;
                 return term;
             }
 
             else if (auto identifier = try_grab(TokenType::identifier)) {
-                auto expression_identifier = m_allocator.alloc<Node::TermIdent>();
-                expression_identifier->identifier = identifier.value();
+                auto identifier_term = m_allocator.alloc<Node::TermIdent>();
+                identifier_term->identifier = identifier.value();
                 auto term = m_allocator.alloc<Node::Term>();
-                term->var = expression_identifier;
+                term->var = identifier_term;
                 return term;
             }
 
+            else if (auto open_paren = try_grab(TokenType::open_parenthesis)) {
+                if (auto expression = parse_expression()) {
+                    try_grab(TokenType::close_parenthesis, "expected ')' ");
+                    auto expression_term = m_allocator.alloc<Node::TermExpr>();
+                    expression_term->expr = expression.value();
+                    auto term = m_allocator.alloc<Node::Term>();
+                    term->var = expression_term;
+                    return term;
+                }
+                else {
+                    return {};
+                }
+            }
+
             return {};
         }
 
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "misc-no-recursion"
-        std::optional<Node::BinExpr*> parse_binary_expression(Node::Expression *left_expression, TokenType type) {
-            if (auto right_expression = parse_expression()) {
-                if (type == TokenType::add) {
+        std::optional<Node::BinExpr*> parse_binary_expression(Node::Expression *expression, TokenType type, int precedence) {
+            if (auto right_expression = parse_expression(precedence)) {
+                if (type == TokenType::plus) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
                     auto binary_expression = m_allocator.alloc<Node::BinExpr>();
                     auto binary_add = m_allocator.alloc<Node::BinAdd>();
+                    left_expression->var = expression->var;
                     binary_add->left_side = left_expression;
                     binary_add->right_side = right_expression.value();
                     binary_expression->bin_expr = binary_add;
                     return binary_expression;
                 }
-                else if (type == TokenType::sub) {
+                else if (type == TokenType::minus) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
                     auto binary_expression = m_allocator.alloc<Node::BinExpr>();
                     auto binary_add = m_allocator.alloc<Node::BinSubtract>();
+                    left_expression->var = expression->var;
                     binary_add->left_side = left_expression;
                     binary_add->right_side = right_expression.value();
                     binary_expression->bin_expr = binary_add;
                     return binary_expression;
                 }
-                else if (type == TokenType::mul) {
+                else if (type == TokenType::star) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
                     auto binary_expression = m_allocator.alloc<Node::BinExpr>();
                     auto binary_add = m_allocator.alloc<Node::BinMultiply>();
+                    left_expression->var = expression->var;
                     binary_add->left_side = left_expression;
                     binary_add->right_side = right_expression.value();
                     binary_expression->bin_expr = binary_add;
                     return binary_expression;
                 }
-                else if (type == TokenType::div) {
+                else if (type == TokenType::forward_slash) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
                     auto binary_expression = m_allocator.alloc<Node::BinExpr>();
                     auto binary_add = m_allocator.alloc<Node::BinDivide>();
+                    left_expression->var = expression->var;
                     binary_add->left_side = left_expression;
                     binary_add->right_side = right_expression.value();
                     binary_expression->bin_expr = binary_add;
@@ -137,71 +161,43 @@ class Parser {
 
             return {};
         }
-#pragma clang diagnostic pop
 
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "misc-no-recursion"
-        std::optional<Node::Expression*> parse_expression() {
+        std::optional<Node::Expression*> parse_expression(int minimum_precedence = 1) {
             if (auto term = parse_term()) {
-                if (auto bin_add = try_grab(TokenType::add)) {
-                    auto left_expression = m_allocator.alloc<Node::Expression>();
-                    left_expression->var = term.value();
-                    if (auto binary_expression = parse_binary_expression(left_expression, bin_add.value().type)) {
-                        auto expression = m_allocator.alloc<Node::Expression>();
-                        expression->var = binary_expression.value();
-                        return expression;
+                auto expression = m_allocator.alloc<Node::Expression>();
+                expression->var = term.value();
+                while (true) {
+                    if (seek().has_value()) {
+                        Token token = seek().value();
+                        int precedence = operator_precedence(token.type);
+                        if (precedence == 0 || precedence < minimum_precedence){
+                            break;
+                        }
+                        grab();
+                        int next_precedence = precedence + 1;
+                        if (auto binary_expression = parse_binary_expression(expression, token.type, next_precedence)){
+                            expression->var = binary_expression.value();
+                        }
+                        else {
+                            return {};
+                        }
+                    }
+                    else {
+                        break;
                     }
                 }
-                else if (auto bin_sub = try_grab(TokenType::sub)) {
-                    auto left_expression = m_allocator.alloc<Node::Expression>();
-                    left_expression->var = term.value();
-                    if (auto binary_expression = parse_binary_expression(left_expression, bin_sub.value().type)) {
-                        auto expression = m_allocator.alloc<Node::Expression>();
-                        expression->var = binary_expression.value();
-                        return expression;
-                    }
-                }
-                else if (auto bin_mul = try_grab(TokenType::mul)) {
-                    auto left_expression = m_allocator.alloc<Node::Expression>();
-                    left_expression->var = term.value();
-                    if (auto binary_expression = parse_binary_expression(left_expression, bin_mul.value().type)) {
-                        auto expression = m_allocator.alloc<Node::Expression>();
-                        expression->var = binary_expression.value();
-                        return expression;
-                    }
-                }
-                else if (auto bin_div = try_grab(TokenType::div)) {
-                    auto left_expression = m_allocator.alloc<Node::Expression>();
-                    left_expression->var = term.value();
-                    if (auto binary_expression = parse_binary_expression(left_expression, bin_div.value().type)) {
-                        auto expression = m_allocator.alloc<Node::Expression>();
-                        expression->var = binary_expression.value();
-                        return expression;
-                    }
-                }
-                else {
-                    auto expression = m_allocator.alloc<Node::Expression>();
-                    expression->var = term.value();
-                    return expression;
-                }
+
+                return expression;
             }
 
             return {};
         }
-#pragma clang diagnostic pop
 
         std::optional<Node::Statement*> parse_statement() {
-            if (seek().has_value() && seek().value().type == TokenType::exit) {
-                grab();
+            if (auto token_exit = try_grab(TokenType::exit)) {
                 auto exit_statement = m_allocator.alloc<Node::StmtExit>();
 
-                if (seek().has_value() && seek().value().type == TokenType::open_parenthesis) {
-                    grab();
-                }
-                else {
-                    std::cerr << "cer: error: expected '('" << std::endl;
-                    exit(EXIT_FAILURE);
-                }
+                try_grab(TokenType::open_parenthesis, "expected '('");
 
                 if (auto node_expr = parse_expression()) {
                     exit_statement->expr = node_expr.value();
@@ -220,38 +216,20 @@ class Parser {
                     exit(EXIT_FAILURE);
                 }
 
-                if (seek().has_value() && seek().value().type == TokenType::close_parenthesis) {
-                    grab();
-                }
-                else {
-                    std::cerr << "cer: error: expected ')'" << std::endl;
-                    exit(EXIT_FAILURE);
-                }
+                try_grab(TokenType::close_parenthesis, "expected ')'");
 
-                if (seek().has_value() && seek().value().type == TokenType::semi) {
-                    grab();
-                }
-                else {
-                    std::cerr << "cer: error: Expected ';'" << std::endl;
-                    exit(EXIT_FAILURE);
-                }
+                try_grab(TokenType::semi, "expected ';'");
 
                 auto statement = m_allocator.alloc<Node::Statement>();
                 statement->var = exit_statement;
                 return statement;
             }
 
-            else if (seek().has_value() && seek().value().type == TokenType::constant) {
-                grab();
+            else if (auto token_const = try_grab(TokenType::constant)) {
                 auto const_statement = m_allocator.alloc<Node::StmtConst>();
 
-                if (auto identifier = try_grab(TokenType::identifier)) {
-                    const_statement->identifier = identifier.value();
-                }
-                else {
-                    std::cerr << "cer: error: expected an identifier" << std::endl;
-                    exit(EXIT_FAILURE);
-                }
+                auto identifier = try_grab(TokenType::identifier, "expected an identifier");
+                const_statement->identifier = identifier;
 
                 try_grab(TokenType::colon, "expected ':'");
                 try_grab(TokenType::int64, "no type declaration for identifier '" + const_statement->identifier.value.value() + "'");
@@ -302,7 +280,7 @@ class Parser {
             return m_tokens.at(m_curr_index + offset);
         }
 
-        inline Token try_grab(TokenType type, std::string error_msg) {
+        inline Token try_grab(TokenType type, const std::string& error_msg) {
             if (seek().has_value() && seek().value().type == type) {
                 return grab();
             }

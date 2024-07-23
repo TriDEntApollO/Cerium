@@ -9,10 +9,10 @@ enum class TokenType {
     int16,
     int32,
     int64,
-    add,
-    sub,
-    mul,
-    div,
+    plus,
+    minus,
+    star,
+    forward_slash,
     colon,
     equals,
     int_lit,
@@ -21,6 +21,21 @@ enum class TokenType {
     open_parenthesis,
     close_parenthesis,
     semi
+};
+
+int operator_precedence(TokenType type) {
+    switch(type) {
+        case TokenType::plus:
+        case TokenType::minus:
+            return 1;
+
+        case TokenType::star:
+        case TokenType::forward_slash:
+            return 2;
+
+        default:
+            return 0;
+    }
 };
 
 struct Token {
@@ -47,22 +62,18 @@ class Tokenizer {
                     if (buff == "exit") {
                         tokens.push_back({ .type = TokenType::exit });
                         buff.clear();
-                        continue;
                     }
                     else if (buff == "const") {
                         tokens.push_back({ .type = TokenType::constant });
                         buff.clear();
-                        continue;
                     }
                     else if (buff == "int64") {
                         tokens.push_back({ .type = TokenType::int64 });
                         buff.clear();
-                        continue;
                     }
                     else {
                         tokens.push_back({ .type = TokenType::identifier, .value = buff });
                         buff.clear();
-                        continue;
                     }
                 }
 
@@ -74,67 +85,56 @@ class Tokenizer {
 
                     tokens.push_back({ .type = TokenType::int_lit, .value = buff });
                     buff.clear();
-                    continue;
                 }
 
                 else if (seek().value() == '=') {
                     grab();
                     tokens.push_back({ .type = TokenType::equals });
-                    continue;
                 }
 
                 else if (seek().value() == '+') {
                     grab();
-                    tokens.push_back({ .type = TokenType::add });
-                    continue;
+                    tokens.push_back({ .type = TokenType::plus });
                 }
 
                 else if (seek().value() == '-') {
                     grab();
-                    tokens.push_back({ .type = TokenType::sub });
-                    continue;
+                    tokens.push_back({ .type = TokenType::minus });
                 }
 
                 else if (seek().value() == '*') {
                     grab();
-                    tokens.push_back({ .type = TokenType::mul });
-                    continue;
+                    tokens.push_back({ .type = TokenType::star });
                 }
 
                 else if (seek().value() == '/') {
                     grab();
-                    tokens.push_back({ .type = TokenType::div });
-                    continue;
+                    tokens.push_back({ .type = TokenType::forward_slash });
                 }
 
                 else if (seek().value() == '(') {
                     grab();
                     tokens.push_back({ .type = TokenType::open_parenthesis });
-                    continue;
                 }
 
                 else if (seek().value() == ')') {
                     grab();
                     tokens.push_back({ .type = TokenType::close_parenthesis });
-                    continue;
                 }
 
                 else if (seek().value() == ':') {
                     grab();
                     tokens.push_back({ .type = TokenType::colon });
-                    continue;
                 }
 
 
                 else if (seek().value() == ';') {
                     grab();
                     tokens.push_back({ .type = TokenType::semi });
-                    continue;
                 }
 
                 else if (seek().value() == ' ' || seek().value() == '\t' || seek().value() == '\n' || std::isspace(seek().value())) {
                     grab();
-                    continue;
                 }
 
                 else {
