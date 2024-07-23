@@ -49,8 +49,33 @@ namespace Node {
         Expression *right_side;
     };
 
+    struct BinModulus {
+        Expression *left_side;
+        Expression *right_side;
+    };
+
+    struct BitAnd{
+        Expression *left_side;
+        Expression *right_side;
+    };
+
+    struct BitOr {
+        Expression *left_side;
+        Expression *right_side;
+    };
+
+    struct BitXor {
+        Expression *left_side;
+        Expression *right_side;
+    };
+
+    struct BitNot {
+        Expression *left_side;
+        Expression *right_side;
+    };
+
     struct BinExpr {
-        std::variant<BinAdd*, BinSubtract*, BinMultiply*, BinDivide*> bin_expr;
+        std::variant<BinAdd*, BinSubtract*, BinMultiply*, BinDivide*, BinModulus*, BitAnd*, BitOr*, BitXor*> bin_expr;
     };
 
     struct Expression {
@@ -157,6 +182,47 @@ class Parser {
                     binary_expression->bin_expr = binary_add;
                     return binary_expression;
                 }
+                else if (type == TokenType::modulus) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
+                    auto binary_expression = m_allocator.alloc<Node::BinExpr>();
+                    auto binary_modulus = m_allocator.alloc<Node::BinModulus>();
+                    left_expression->var = expression->var;
+                    binary_modulus->left_side = left_expression;
+                    binary_modulus->right_side = right_expression.value();
+                    binary_expression->bin_expr = binary_modulus;
+                    return binary_expression;
+                }
+                else if (type == TokenType::ampersand) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
+                    auto binary_expression = m_allocator.alloc<Node::BinExpr>();
+                    auto bitwise_and = m_allocator.alloc<Node::BitAnd>();
+                    left_expression->var = expression->var;
+                    bitwise_and->left_side = left_expression;
+                    bitwise_and->right_side = right_expression.value();
+                    binary_expression->bin_expr = bitwise_and;
+                    return binary_expression;
+                }
+                else if (type == TokenType::caret) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
+                    auto binary_expression = m_allocator.alloc<Node::BinExpr>();
+                    auto bitwise_xor = m_allocator.alloc<Node::BitXor>();
+                    left_expression->var = expression->var;
+                    bitwise_xor->left_side = left_expression;
+                    bitwise_xor->right_side = right_expression.value();
+                    binary_expression->bin_expr = bitwise_xor;
+                    return binary_expression;
+                }
+
+                else if (type == TokenType::pipe) {
+                    auto left_expression = m_allocator.alloc<Node::Expression>();
+                    auto binary_expression = m_allocator.alloc<Node::BinExpr>();
+                    auto bitwise_or = m_allocator.alloc<Node::BitOr>();
+                    left_expression->var = expression->var;
+                    bitwise_or->left_side = left_expression;
+                    bitwise_or->right_side = right_expression.value();
+                    binary_expression->bin_expr = bitwise_or;
+                    return binary_expression;
+                }
             }
 
             return {};
@@ -218,7 +284,7 @@ class Parser {
 
                 try_grab(TokenType::close_parenthesis, "expected ')'");
 
-                try_grab(TokenType::semi, "expected ';'");
+                try_grab(TokenType::semi_colon, "expected ';'");
 
                 auto statement = m_allocator.alloc<Node::Statement>();
                 statement->var = exit_statement;
@@ -243,7 +309,7 @@ class Parser {
                     exit(EXIT_FAILURE);
                 }
 
-                try_grab(TokenType::semi, "expected ';'");
+                try_grab(TokenType::semi_colon, "expected ';'");
 
                 auto statement = m_allocator.alloc<Node::Statement>();
                 statement->var = const_statement;

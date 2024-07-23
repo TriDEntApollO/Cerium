@@ -2,7 +2,7 @@
 
 #include <string>
 #include <sstream>
-#include <unordered_map>
+#include <map>
 
 #include "parser.hpp"
 
@@ -87,6 +87,42 @@ public:
                 code_stream << generator->pop_stack("rbx");
                 code_stream << generator->pop_stack("rax");
                 code_stream << "\tdiv rbx\n";
+                code_stream << generator->push_stack("rax");
+            }
+
+            void operator() (const Node::BinModulus *binary_modulus) const {
+                code_stream << generator->generate_expression(binary_modulus->left_side);
+                code_stream << generator->generate_expression(binary_modulus->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\tdiv rbx\n";
+                code_stream << generator->push_stack("rdx");
+            }
+
+            void operator() (const Node::BitAnd *bitwise_and) const {
+                code_stream << generator->generate_expression(bitwise_and->left_side);
+                code_stream << generator->generate_expression(bitwise_and->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\tand rax, rbx\n";
+                code_stream << generator->push_stack("rax");
+            }
+
+            void operator() (const Node::BitXor *bitwise_xor) const {
+                code_stream << generator->generate_expression(bitwise_xor->left_side);
+                code_stream << generator->generate_expression(bitwise_xor->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\txor rax, rbx\n";
+                code_stream << generator->push_stack("rax");
+            }
+
+            void operator() (const Node::BitOr *bitwise_or) const {
+                code_stream << generator->generate_expression(bitwise_or->left_side);
+                code_stream << generator->generate_expression(bitwise_or->right_side);
+                code_stream << generator->pop_stack("rbx");
+                code_stream << generator->pop_stack("rax");
+                code_stream << "\tor rax, rbx\n";
                 code_stream << generator->push_stack("rax");
             }
         };
@@ -191,5 +227,5 @@ private:
     const Node::Program m_program_node;
     std::stringstream m_asm_code;
     size_t m_stack_pointer;
-    std::unordered_map<std::string, Variable> m_variables_map;
+    std::map<std::string, Variable> m_variables_map;
 };

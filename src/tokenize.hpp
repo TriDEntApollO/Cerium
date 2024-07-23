@@ -9,29 +9,54 @@ enum class TokenType {
     int16,
     int32,
     int64,
-    plus,
-    minus,
-    star,
-    forward_slash,
-    colon,
-    equals,
     int_lit,
     constant,
     identifier,
+    colon,
+    semi_colon,
+    plus,
+    minus,
+    equals,
+    star,
+    modulus,
+    pipe,
+    tilde,
+    caret,
+    ampersand,
+    postfix_add,
+    postfix_sub,
+    prefix_add,
+    prefix_sub,
+    forward_slash,
+    backward_slash,
     open_parenthesis,
     close_parenthesis,
-    semi
+    open_curly_bracket,
+    close_curly_bracket,
+    open_square_bracket,
+    close_square_bracket,
 };
 
 int operator_precedence(TokenType type) {
     switch(type) {
+        case TokenType::pipe:
+
+            return 1;
+        case TokenType::caret:
+
+            return 2;
+        case TokenType::ampersand:
+
+            return 3;
+
         case TokenType::plus:
         case TokenType::minus:
-            return 1;
+            return 4;
 
         case TokenType::star:
         case TokenType::forward_slash:
-            return 2;
+        case TokenType::modulus:
+            return 5;
 
         default:
             return 0;
@@ -87,59 +112,113 @@ class Tokenizer {
                     buff.clear();
                 }
 
-                else if (seek().value() == '=') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::equals });
-                }
-
-                else if (seek().value() == '+') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::plus });
-                }
-
-                else if (seek().value() == '-') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::minus });
-                }
-
-                else if (seek().value() == '*') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::star });
-                }
-
-                else if (seek().value() == '/') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::forward_slash });
-                }
-
-                else if (seek().value() == '(') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::open_parenthesis });
-                }
-
-                else if (seek().value() == ')') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::close_parenthesis });
-                }
-
-                else if (seek().value() == ':') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::colon });
-                }
-
-
-                else if (seek().value() == ';') {
-                    grab();
-                    tokens.push_back({ .type = TokenType::semi });
-                }
-
-                else if (seek().value() == ' ' || seek().value() == '\t' || seek().value() == '\n' || std::isspace(seek().value())) {
-                    grab();
-                }
-
                 else {
-                    std::cerr << "cer: error: invalid token" << std::endl;
-                    exit(EXIT_FAILURE);
+                    switch (seek().value()) {
+                        case '=':
+                            grab();
+                            tokens.push_back({ .type = TokenType::equals });
+                            break;
+
+                        case '+':
+                            grab();
+                            tokens.push_back({ .type = TokenType::plus });
+                            break;
+
+                        case '-':
+                            grab();
+                            tokens.push_back({ .type = TokenType::minus });
+                            break;
+
+                        case '*':
+                            grab();
+                            tokens.push_back({ .type = TokenType::star });
+                            break;
+
+                        case '/':
+                            grab();
+                            tokens.push_back({ .type = TokenType::forward_slash });
+                            break;
+
+                        case '%':
+                            grab();
+                            tokens.push_back({ .type = TokenType::modulus });
+                            break;
+
+                        case '\\':
+                            grab();
+                            tokens.push_back({ .type = TokenType::backward_slash });
+                            break;
+
+                        case '^':
+                            grab();
+                            tokens.push_back({ .type = TokenType::caret });
+                            break;
+
+                        case '~':
+                            grab();
+                            tokens.push_back({ .type = TokenType::tilde });
+                            break;
+
+                        case '|':
+                            grab();
+                            tokens.push_back({ .type = TokenType::pipe });
+                            break;
+
+                        case '&':
+                            grab();
+                            tokens.push_back({ .type = TokenType::ampersand });
+                            break;
+
+                        case '(':
+                            grab();
+                            tokens.push_back({ .type = TokenType::open_parenthesis });
+                            break;
+
+                        case ')':
+                            grab();
+                            tokens.push_back({ .type = TokenType::close_parenthesis });
+                            break;
+
+                        case '{':
+                            grab();
+                            tokens.push_back({ .type = TokenType::open_curly_bracket });
+                            break;
+
+                        case '}':
+                            grab();
+                            tokens.push_back({ .type = TokenType::close_curly_bracket});
+                            break;
+
+                        case '[':
+                            grab();
+                            tokens.push_back({ .type = TokenType::open_square_bracket });
+                            break;
+
+                        case ']':
+                            grab();
+                            tokens.push_back({ .type = TokenType::close_square_bracket });
+                            break;
+
+                        case ':':
+                            grab();
+                            tokens.push_back({ .type = TokenType::colon });
+                            break;
+
+                        case ';':
+                            grab();
+                            tokens.push_back({ .type = TokenType::semi_colon });
+                            break;
+
+                        case ' ':
+                        case '\t':
+                        case '\n':
+                            grab();
+                            break;
+
+                        default:
+                            std::cerr << "cer: error: invalid token" << std::endl;
+                            exit(EXIT_FAILURE);
+                    }
                 }
             }
 

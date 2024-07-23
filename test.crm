@@ -1,4 +1,3 @@
-const x: int64 = 20 - 15;
-const y: int64 = x * 4 - (5 + 5);
+const x: int64 = 3 & 6 | 4 ^ 2;
 
-exit(y);
+exit(x);
