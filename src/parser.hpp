@@ -12,6 +12,8 @@
 
 namespace Node {
     struct Expression;
+    struct Statement;
+    struct StmtIfNext;
 
     struct TermInt {
         Token int_lit;
@@ -86,13 +88,43 @@ namespace Node {
         Expression *expr;
     };
 
-    struct StmtConst {
+    struct StmtMut {
         Token identifier;
         Expression *expr{};
     };
 
+    struct StmtIdent {
+        Token identifier;
+        Expression *expr{};
+    };
+
+    struct Scope {
+        std::vector<Statement*> stmts;
+    };
+
+    struct StmtElif {
+        Expression *expr{};
+        Scope *scope{};
+        std::optional<StmtIfNext*> next;
+    };
+
+    struct StmtElse {
+        Scope *scope{};
+    };
+
+    struct StmtIfNext {
+        std::variant<StmtElif*, StmtElse*> var;
+    };
+
+    struct StmtIf {
+        Expression *expr{};
+        Scope *scope{};
+        std::optional<StmtIfNext*> next;
+    };
+
+
     struct Statement {
-        std::variant<StmtExit*, StmtConst*> var;
+        std::variant<StmtExit*, StmtMut*, StmtIdent*, Scope*, StmtIf*> var;
     };
 
     struct Program {
@@ -259,6 +291,60 @@ class Parser {
             return {};
         }
 
+        Node::Scope* parse_scope() {
+            auto scope = m_allocator.alloc<Node::Scope>();
+            while (auto stmt = parse_statement()) {
+                scope->stmts.push_back(stmt.value());
+            }
+
+            try_grab(TokenType::close_curly_bracket, "expected '}'");
+
+            return scope;
+        }
+
+        std::optional<Node::StmtIfNext*> parse_if_next() {
+            if (auto token_elif = try_grab(TokenType::elif)) {
+                try_grab(TokenType::open_parenthesis, "expected '('");
+                auto elif_statement = m_allocator.alloc<Node::StmtElif>();
+
+                if (auto expression = parse_expression()) {
+                    elif_statement->expr = expression.value();
+                }
+                else {
+                    std::cerr << "cer: error: invalid expression: if" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+
+                try_grab(TokenType::close_parenthesis, "expected ')'");
+                try_grab(TokenType::open_curly_bracket, "expected '{'");
+
+                auto scope = parse_scope();
+                elif_statement->scope = scope;
+
+                if (auto next = parse_if_next()) {
+                    elif_statement->next = next;
+                }
+
+                auto statement = m_allocator.alloc<Node::StmtIfNext>();
+                statement->var = elif_statement;
+                return statement;
+            }
+
+            else if (auto token_else = try_grab(TokenType::else_)) {
+                try_grab(TokenType::open_curly_bracket, "expected '{'");
+                auto else_statement = m_allocator.alloc<Node::StmtElse>();
+
+                auto scope = parse_scope();
+                else_statement->scope = scope;
+
+                auto statement = m_allocator.alloc<Node::StmtIfNext>();
+                statement->var = else_statement;
+                return statement;
+            }
+
+            return {};
+        }
+
         std::optional<Node::Statement*> parse_statement() {
             if (auto token_exit = try_grab(TokenType::exit)) {
                 auto exit_statement = m_allocator.alloc<Node::StmtExit>();
@@ -291,8 +377,8 @@ class Parser {
                 return statement;
             }
 
-            else if (auto token_const = try_grab(TokenType::constant)) {
-                auto const_statement = m_allocator.alloc<Node::StmtConst>();
+            else if (auto token_const = try_grab(TokenType::mut)) {
+                auto const_statement = m_allocator.alloc<Node::StmtMut>();
 
                 auto identifier = try_grab(TokenType::identifier, "expected an identifier");
                 const_statement->identifier = identifier;
@@ -314,6 +400,62 @@ class Parser {
                 auto statement = m_allocator.alloc<Node::Statement>();
                 statement->var = const_statement;
                 return statement;
+            }
+
+            else if (auto token_identifier = try_grab(TokenType::identifier)) {
+                auto identifier_statement = m_allocator.alloc<Node::StmtIdent>();
+                identifier_statement->identifier = token_identifier.value();
+
+                try_grab(TokenType::equals, "expected '='");
+
+                if (auto node_expr = parse_expression()) {
+                    identifier_statement->expr = node_expr.value();
+                }
+                else {
+                    std::cerr << "cer: error: invalid expression: const" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+
+                try_grab(TokenType::semi_colon, "expected ';'");
+
+                auto statement = m_allocator.alloc<Node::Statement>();
+                statement->var = identifier_statement;
+                return statement;
+            }
+
+            else if (auto token_open_curly = try_grab(TokenType::open_curly_bracket)) {
+                auto scope = parse_scope();
+                auto statement = m_allocator.alloc<Node::Statement>();
+                statement->var = scope;
+                return statement;
+            }
+
+            else if (auto token_if = try_grab(TokenType::if_)) {
+                try_grab(TokenType::open_parenthesis, "expected '('");
+                auto if_statement = m_allocator.alloc<Node::StmtIf>();
+
+                if (auto expression = parse_expression()) {
+                    if_statement->expr = expression.value();
+                }
+                else {
+                    std::cerr << "cer: error: invalid expression: if" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+
+                try_grab(TokenType::close_parenthesis, "expected ')'");
+                try_grab(TokenType::open_curly_bracket, "expected '{'");
+
+                auto scope = parse_scope();
+                if_statement->scope = scope;
+
+                if (auto next = parse_if_next()) {
+                    if_statement->next = next;
+                }
+
+                auto statement = m_allocator.alloc<Node::Statement>();
+                statement->var = if_statement;
+                return statement;
+
             }
 
             return {};

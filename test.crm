@@ -1,3 +1,19 @@
-const x: int64 = 3 & 6 | 4 ^ 2;
+mut x: int64 = 0;
+mut y: int64 = 0;
+mut z: int64 = 0;
+
+if(x) {
+    x = 1;
+}
+elif(y) {
+    x = 2;
+}
+elif(z) {
+    x = 3;
+}
+else {
+    x = 4;
+}
+
 
 exit(x);

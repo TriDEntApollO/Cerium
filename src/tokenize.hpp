@@ -6,14 +6,23 @@
 
 enum class TokenType {
     exit,
+    mut,
+    constant,
     int16,
     int32,
     int64,
     int_lit,
-    constant,
+    boolean,
     identifier,
     colon,
     semi_colon,
+    True,
+    False,
+    if_,
+    else_,
+    elif,
+    while_,
+    for_,
     plus,
     minus,
     equals,
@@ -88,12 +97,36 @@ class Tokenizer {
                         tokens.push_back({ .type = TokenType::exit });
                         buff.clear();
                     }
-                    else if (buff == "const") {
-                        tokens.push_back({ .type = TokenType::constant });
+                    else if (buff == "mut") {
+                        tokens.push_back({ .type = TokenType::mut });
                         buff.clear();
                     }
                     else if (buff == "int64") {
                         tokens.push_back({ .type = TokenType::int64 });
+                        buff.clear();
+                    }
+                    else if (buff == "bool") {
+                        tokens.push_back({ .type = TokenType::boolean });
+                        buff.clear();
+                    }
+                    else if (buff == "true") {
+                        tokens.push_back({ .type = TokenType::True });
+                        buff.clear();
+                    }
+                    else if (buff == "false") {
+                        tokens.push_back({ .type = TokenType::False });
+                        buff.clear();
+                    }
+                    else if (buff == "if") {
+                        tokens.push_back({ .type = TokenType::if_ });
+                        buff.clear();
+                    }
+                    else if (buff == "else") {
+                        tokens.push_back({ .type = TokenType::else_ });
+                        buff.clear();
+                    }
+                    else if (buff == "elif") {
+                        tokens.push_back({ .type = TokenType::elif });
                         buff.clear();
                     }
                     else {
@@ -136,7 +169,30 @@ class Tokenizer {
 
                         case '/':
                             grab();
-                            tokens.push_back({ .type = TokenType::forward_slash });
+                            if (seek().has_value() && seek().value() == '/') {
+                                grab();
+                                while(seek().has_value() && seek().value() != '\n') {
+                                    grab();
+                                }
+                            }
+                            else if (seek().has_value() && seek().value() == '*') {
+                                grab();
+                                bool not_terminated = true;
+                                while(seek().has_value()) {
+                                    if (grab() == '*' && seek().has_value() && seek().value() == '/') {
+                                        grab();
+                                        not_terminated = false;
+                                        break;
+                                    }
+                                }
+
+                                if (not_terminated) {
+                                    std::cerr << "cer: error: unterminated comment" << std::endl;
+                                }
+                            }
+                            else {
+                                tokens.push_back({.type = TokenType::forward_slash});
+                            }
                             break;
 
                         case '%':
