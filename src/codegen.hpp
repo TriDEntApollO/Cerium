@@ -6,15 +6,16 @@
 #include <string>
 #include <sstream>
 
+#include "error.hpp"
 #include "parser.hpp"
+#include "varaibles.hpp"
 
 
 class CodeGenerator {
 public:
-    inline explicit CodeGenerator(Node::Program program_node) : m_program_node(std::move(program_node)) {
+    inline explicit CodeGenerator(Node::Program program_node, const Variables& variables) : m_program_node(std::move(program_node))
+                                                                                    , m_variables(variables){
         m_stack_pointer = 0;
-        m_variables_map = {};
-        m_scopes = {};
         m_current_scope = 0;
         m_label_map = { {TokenType::if_, 0}, {TokenType::else_, 0},
                         {TokenType::elif, 0}, {TokenType::while_, 0},
@@ -33,16 +34,11 @@ public:
 
             void operator() (const Node::TermIdent *identifier_term) {
                 std::string variable_identifier = identifier_term->identifier.value.value();
-                if (auto iterator = generator.is_available(variable_identifier)) {
-                    const Variable& variable = iterator.value()->second;
+                auto iterator = generator.m_variables.get_variable(variable_identifier, generator.m_current_scope);
+                    const Variable& variable = iterator->second;
                     std::stringstream offset;
                     offset << "QWORD [rsp + " << (generator.m_stack_pointer - variable.stack_location) * 8 << "]";
                     code_stream << generator.push_stack(offset.str());
-                }
-                else {
-                    std::cerr << "cer: error: undeclared identifier '" << variable_identifier << "'" << std::endl;
-                    std::exit(EXIT_FAILURE);
-                }
             }
 
             void operator() (const Node::TermExpr *expression_term) const {
@@ -217,42 +213,30 @@ public:
             void operator() (const Node::StmtExit *exit_statement) {
                 std::string exit_label = generator.generate_label(TokenType::exit);
                 code_stream << generator.generate_expression(exit_statement->expr);
-//                code_stream << "\n" << exit_label << ":\n";
-//                code_stream << "\tmov rax, 60\n";
                 code_stream << generator.pop_stack("rdi");
-//                code_stream << "\tsyscall\n";
                 code_stream << "\tjmp _exit\n";
             }
 
-            void operator() (const Node::StmtMut *const_statement) {
-                std::string variable_identifier = const_statement->identifier.value.value() + "_sc_" + std::to_string(generator.m_current_scope);
-                if (generator.m_variables_map.contains(variable_identifier)) {
-                    std::cerr << "cer: error: multiple definitions of identifier '" << const_statement->identifier.value.value() << "'" << std::endl;
-                    std::exit(EXIT_FAILURE);
+            void operator() (const Node::StmtMut *mut_statement) {
+                std::string variable_identifier = mut_statement->identifier.value.value();
+                if (mut_statement->expr.has_value()) {
+                    code_stream << generator.generate_expression(mut_statement->expr.value());
+                }
+                else {
+                    code_stream << generator.move_stack(1);
                 }
 
-                code_stream << generator.generate_expression(const_statement->expr);
-
-                Variable variable = {.stack_location = generator.m_stack_pointer };
-                generator.m_variables_map.insert({ variable_identifier, variable });
-                if (generator.m_current_scope != 0) {
-                    generator.m_scopes.top().push_back(variable_identifier);
-                }
+                generator.m_variables.add_variable(variable_identifier, generator.m_stack_pointer, generator.m_current_scope);
             }
 
             void operator() (const Node::StmtIdent *identifier_statement) {
                 std::string variable_identifier = identifier_statement->identifier.value.value();
-                if (auto iterator = generator.is_available(variable_identifier)) {
-                    const Variable& variable = iterator.value()->second;
-                    std::stringstream offset;
-                    offset << "QWORD [rsp + " << (generator.m_stack_pointer - variable.stack_location) * 8 << "]";
-                    code_stream << generator.generate_expression(identifier_statement->expr);
-                    code_stream << generator.pop_stack(offset.str());
-                }
-                else {
-                    std::cerr << "cer: error: undeclared identifier '" << variable_identifier << "'" << std::endl;
-                    std::exit(EXIT_FAILURE);
-                }
+                auto iterator = generator.m_variables.get_variable(variable_identifier, generator.m_current_scope);
+                const Variable& variable = iterator->second;
+                std::stringstream offset;
+                offset << "QWORD [rsp + " << (generator.m_stack_pointer - variable.stack_location) * 8 << "]";
+                code_stream << generator.generate_expression(identifier_statement->expr);
+                code_stream << generator.pop_stack(offset.str());
             }
 
             void operator() (const Node::Scope *scope_statement) {
@@ -306,7 +290,6 @@ public:
         m_asm_code << "\n\tmov rdi, 0\n";
         m_asm_code << "\n_exit:\n";
         m_asm_code << "\tmov rax, 60\n";
-//        m_asm_code << "\tmov rdi, 0\n";
         m_asm_code << "\tsyscall\n";
 
         return m_asm_code.str();
@@ -314,19 +297,13 @@ public:
 
 
 private:
-    std::map<TokenType, int> m_label_map;
-
-    struct Variable {
-        size_t stack_location;
-    };
-
     int m_current_scope;
+    Variables m_variables;
     size_t m_stack_pointer;
     std::stringstream m_asm_code;
     std::vector<std::string> m_labels;
     const Node::Program m_program_node;
-    std::stack<std::vector<std::string>> m_scopes;
-    std::map<std::string, Variable> m_variables_map;
+    std::map<TokenType, int> m_label_map;
 
     std::string push_stack(const std::string &x64_register) {
         std::stringstream code;
@@ -344,20 +321,29 @@ private:
         return code.str();
     }
 
+    std::string move_stack(int offset) {
+        std::stringstream code;
+        code << "\tsub rsp, " << offset * 8 << "\n";
+        m_stack_pointer = m_stack_pointer + offset; // One size is 64bit
+
+        return code.str();
+    }
+
     void begin_scope() {
-        m_scopes.push({});
+        m_variables.scope_push({});
         m_current_scope++;
     }
 
     std::string end_scope() {
         std::stringstream code;
-        size_t pop_count = m_scopes.top().size();
-        for(const std::string& identifier : m_scopes.top()){
-            m_variables_map.erase(identifier);
+        auto scope_top = m_variables.get_top();
+        size_t pop_count = scope_top.size();
+        for(const std::string& identifier : scope_top){
+            m_variables.delete_variable(identifier);
         }
 
         code << "\tadd rsp, " << pop_count * 8 << "\n";
-        m_scopes.pop();
+        m_variables.scope_pop();
         m_stack_pointer -= pop_count;
         m_current_scope--;
 
@@ -392,17 +378,5 @@ private:
         m_label_map[type] += 1;
 
         return label;
-    }
-
-    std::optional<std::map<std::string, Variable>::iterator> is_available(const std::string& identifier) {
-        for (int scope = m_current_scope; scope >= 0; scope--) {
-            std::string current_identifier = identifier + "_sc_" + std::to_string(scope);
-            auto iterator = m_variables_map.find(current_identifier);
-            if (iterator != m_variables_map.end()) {
-                return iterator;
-            }
-        }
-
-        return {};
     }
 };

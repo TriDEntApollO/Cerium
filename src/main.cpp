@@ -7,9 +7,12 @@
 #include <optional>
 #include <filesystem>
 
+#include "./token.hpp"
+#include "./error.hpp"
 #include "./tokenize.hpp"
 #include "./parser.hpp"
 #include "./codegen.hpp"
+#include "./varaibles.hpp"
 
 
 int IsValidFile(std::string filename) {
@@ -66,30 +69,30 @@ int main(int argc, char **argv) {
     input.close();
     std::string contents = contents_stream.str();
 
-    Tokenizer tokenizer(std::move(contents));
+    Tokenizer tokenizer(std::move(contents), source_file);
     std::vector<Token> tokens = tokenizer.tokenize();
-  
-    Parser parser(std::move(tokens));
-    std::optional<Node::Program> ast = parser.parse_program();
 
-    if (!ast.has_value()) {
-        std::cerr << "cer: error: invalid syntax" << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    Parser parser(std::move(tokens), source_file);
+    std::pair<Node::Program, Variables> ast_vars_pair = parser.parse_program();
+
+    Node::Program ast = ast_vars_pair.first;
+    Variables variables = ast_vars_pair.second;
+
+    if (!error_flag) {
+        CodeGenerator generator(ast, variables);
+
+        std::fstream file("out.asm", std::ios::out);
+        file << generator.generate_program();
+        file.close();
 
 
-    CodeGenerator generator(ast.value());
-   
-    std::fstream file("out.asm", std::ios::out);
-    file << generator.generate_program();
-    file.close();
-
-    linker_command = "ld -o " + output_file + " out.o";
-    system("nasm -felf64 out.asm");
-    system(linker_command.c_str());
-    if (!debug_flag) {
-        system("rm out.o");
-        system("rm out.asm");
+        linker_command = "ld -o " + output_file + " out.o";
+        system("nasm -felf64 out.asm");
+        system(linker_command.c_str());
+        if (!debug_flag) {
+            system("rm out.o");
+            system("rm out.asm");
+        }
     }
 
     return 0;

@@ -1,12 +1,15 @@
 #pragma once
 
+#include <utility>
 #include <vector>
 #include <string>
 #include <sstream>
 #include <variant>
 #include <optional>
 
+#include "error.hpp"
 #include "tokenize.hpp"
+#include "varaibles.hpp"
 #include "arenaallocator.hpp"
 
 
@@ -90,7 +93,7 @@ namespace Node {
 
     struct StmtMut {
         Token identifier;
-        Expression *expr{};
+        std::optional<Expression*> expr{};
     };
 
     struct StmtIdent {
@@ -134,8 +137,11 @@ namespace Node {
 
 class Parser {
     public:
-        inline explicit Parser(std::vector<Token> tokens) : m_tokens(std::move(tokens)), m_allocator(1024 * 1024 * 4) {
+        inline explicit Parser(std::vector<Token> tokens, std::string  filename) : m_tokens(std::move(tokens))
+                                                                             , m_allocator(1024 * 1024 * 4)
+                                                                             , m_filename(std::move(filename)) {
             m_curr_index = 0;
+            m_current_scope = 0;
         }
 
         std::optional<Node::Term*> parse_term() {
@@ -149,7 +155,12 @@ class Parser {
 
             else if (auto identifier = try_grab(TokenType::identifier)) {
                 auto identifier_term = m_allocator.alloc<Node::TermIdent>();
-                identifier_term->identifier = identifier.value();
+                if (m_variables.exists(identifier.value().value.value(), m_current_scope)) {
+                    identifier_term->identifier = identifier.value();
+                }
+                else {
+                    error_identifier(m_filename, "identifier not declared in this scope", identifier.value());
+                }
                 auto term = m_allocator.alloc<Node::Term>();
                 term->var = identifier_term;
                 return term;
@@ -292,12 +303,14 @@ class Parser {
         }
 
         Node::Scope* parse_scope() {
+            m_current_scope++;
             auto scope = m_allocator.alloc<Node::Scope>();
             while (auto stmt = parse_statement()) {
                 scope->stmts.push_back(stmt.value());
             }
 
             try_grab(TokenType::close_curly_bracket, "expected '}'");
+            m_current_scope--;
 
             return scope;
         }
@@ -311,8 +324,12 @@ class Parser {
                     elif_statement->expr = expression.value();
                 }
                 else {
-                    std::cerr << "cer: error: invalid expression: if" << std::endl;
-                    exit(EXIT_FAILURE);
+                    if (auto token = seek()) {
+                        error_expected(m_filename, "expected primary expression", token.value());
+                    }
+                    else {
+                        error_expected(m_filename, "expected primary expression", "before the end of input", m_curr_line, m_curr_col);
+                    }
                 }
 
                 try_grab(TokenType::close_parenthesis, "expected ')'");
@@ -364,8 +381,12 @@ class Parser {
                     exit_statement->expr = exit_code;
                 }
                 else {
-                    std::cerr << "cer: error: invalid expression: exit" << std::endl;
-                    exit(EXIT_FAILURE);
+                    if (auto token = seek()) {
+                        error_expected(m_filename, "expected primary expression", token.value());
+                    }
+                    else {
+                        error_expected(m_filename, "expected primary expression", "before the end of input", m_curr_line, m_curr_col);
+                    }
                 }
 
                 try_grab(TokenType::close_parenthesis, "expected ')'");
@@ -377,43 +398,86 @@ class Parser {
                 return statement;
             }
 
-            else if (auto token_const = try_grab(TokenType::mut)) {
-                auto const_statement = m_allocator.alloc<Node::StmtMut>();
-
+            else if (auto token_mut = try_grab(TokenType::mut)) {
+                auto mut_statement = m_allocator.alloc<Node::StmtMut>();
                 auto identifier = try_grab(TokenType::identifier, "expected an identifier");
-                const_statement->identifier = identifier;
 
-                try_grab(TokenType::colon, "expected ':'");
-                try_grab(TokenType::int64, "no type declaration for identifier '" + const_statement->identifier.value.value() + "'");
-                try_grab(TokenType::equals, "expected '='");
+                if (identifier.has_value()) {
+                    if (m_variables.is_valid(identifier.value().value.value(), m_current_scope)) {
+                        mut_statement->identifier = identifier.value();
+                        m_variables.declare_variable(identifier.value().value.value(), m_current_scope);
 
-                if (auto node_expr = parse_expression()) {
-                    const_statement->expr = node_expr.value();
+                        try_grab(TokenType::colon, "expected ':'");
+
+                        if (identifier.has_value()) {
+                            try_grab(TokenType::int64, "no type declaration for identifier '" + mut_statement->identifier.value.value() + "'");
+                        }
+                        else {
+                            try_grab(TokenType::int64,"no type declaration");
+                        }
+
+                        if (auto equals = try_grab(TokenType::equals)) {
+                            if (auto node_expr = parse_expression()) {
+                                mut_statement->expr = node_expr.value();
+                            } else {
+                                if (auto token = seek()) {
+                                    error_expected(m_filename, "expected primary expression", token.value());
+                                } else {
+                                    error_expected(m_filename, "expected primary expression", "before the end of input",
+                                                   m_curr_line, m_curr_col);
+                                }
+                            }
+                        }
+
+                        if (seek().has_value() && (seek().value().type == TokenType::identifier || seek().value().type == TokenType::int_lit
+                                                || seek().value().type == TokenType::open_parenthesis)) {
+                            auto token = seek();
+                            error_expected(m_filename, "expected '='", token.value());
+                        }
+                    }
+                    else {
+                        error_identifier(m_filename, "multiple definitions of identifier", identifier.value());
+                        while(seek().has_value() && !is_statement(seek().value().type)) {
+                            grab();
+                        }
+                    }
                 }
                 else {
-                    std::cerr << "cer: error: invalid expression: const" << std::endl;
-                    exit(EXIT_FAILURE);
+                    while (seek().has_value() && !is_statement(seek().value().type)) {
+                        grab();
+                    }
                 }
 
                 try_grab(TokenType::semi_colon, "expected ';'");
 
                 auto statement = m_allocator.alloc<Node::Statement>();
-                statement->var = const_statement;
+                statement->var = mut_statement;
                 return statement;
             }
 
             else if (auto token_identifier = try_grab(TokenType::identifier)) {
                 auto identifier_statement = m_allocator.alloc<Node::StmtIdent>();
                 identifier_statement->identifier = token_identifier.value();
+                if (m_variables.exists(token_identifier.value().value.value(), m_current_scope)) {
+                    try_grab(TokenType::equals, "expected '='");
 
-                try_grab(TokenType::equals, "expected '='");
-
-                if (auto node_expr = parse_expression()) {
-                    identifier_statement->expr = node_expr.value();
+                    if (auto node_expr = parse_expression()) {
+                        identifier_statement->expr = node_expr.value();
+                    }
+                    else {
+                        if (auto token = seek()) {
+                            error_expected(m_filename, "expected primary expression", token.value());
+                        }
+                        else {
+                            error_expected(m_filename, "expected primary expression", "before the end of input", m_curr_line, m_curr_col);
+                        }
+                    }
                 }
                 else {
-                    std::cerr << "cer: error: invalid expression: const" << std::endl;
-                    exit(EXIT_FAILURE);
+                    error_identifier(m_filename, "identifier not declared in this scope",token_identifier.value());
+                    while(seek().has_value() && !is_statement(seek().value().type)) {
+                        grab();
+                    }
                 }
 
                 try_grab(TokenType::semi_colon, "expected ';'");
@@ -438,8 +502,12 @@ class Parser {
                     if_statement->expr = expression.value();
                 }
                 else {
-                    std::cerr << "cer: error: invalid expression: if" << std::endl;
-                    exit(EXIT_FAILURE);
+                    if (auto token = seek()) {
+                        error_expected(m_filename, "expected primary expression", token.value());
+                    }
+                    else {
+                        error_expected(m_filename, "expected primary expression", "before the end of input", m_curr_line, m_curr_col);
+                    }
                 }
 
                 try_grab(TokenType::close_parenthesis, "expected ')'");
@@ -458,10 +526,14 @@ class Parser {
 
             }
 
+            else if (auto token_semi = try_grab(TokenType::semi_colon)) {
+                grab();
+            }
+
             return {};
         }
 
-        std::optional<Node::Program> parse_program() {
+        std::pair<Node::Program, Variables> parse_program() {
             Node::Program program;
             while(seek().has_value()) {
                 if (auto statement = parse_statement()) {
@@ -473,13 +545,22 @@ class Parser {
                 }
             }
 
-            return program;
+            std::pair<Node::Program, Variables> pair;
+            pair.first = program;
+            pair.second = m_variables;
+
+            return pair;
         }
 
     private:
-        const std::vector<Token> m_tokens;
+        int m_curr_col;
+        int m_curr_line;
+        int m_current_scope;
+        Variables m_variables;
         size_t m_curr_index;
+        const std::string m_filename;
         ArenaAllocator m_allocator;
+        const std::vector<Token> m_tokens;
 
         [[nodiscard]] inline std::optional<Token> seek(int offset = 0) const {
             if (m_curr_index + offset >= m_tokens.size()) {
@@ -488,14 +569,20 @@ class Parser {
             return m_tokens.at(m_curr_index + offset);
         }
 
-        inline Token try_grab(TokenType type, const std::string& error_msg) {
+        inline std::optional<Token> try_grab(TokenType type, const std::string& error_msg) {
             if (seek().has_value() && seek().value().type == type) {
                 return grab();
             }
             else {
-                std::cerr << "cer: error: " << error_msg << std::endl;
-                exit(EXIT_FAILURE);
+                if (auto token = seek()) {
+                    error_expected(m_filename, error_msg, token.value());
+                }
+                else {
+                    error_expected(m_filename, error_msg, "before the end of input", m_curr_line, m_curr_col);
+                }
             }
+
+            return {};
         }
 
         inline std::optional<Token> try_grab(TokenType type) {
@@ -507,6 +594,9 @@ class Parser {
         }
 
         inline Token grab() {
-            return (m_tokens.at(m_curr_index++));
+            Token token = m_tokens.at(m_curr_index++);
+            m_curr_line = token.line_no;
+            m_curr_col = token.column_no;
+            return token;
         }
 };

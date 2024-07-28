@@ -1,19 +1,23 @@
-mut x: int64 = 0;
-mut y: int64 = 0;
-mut z: int64 = 0;
+mut x: int64;
+mut y: int64;
+mut z: int64;
 
-if(x) {
-    x = 1;
+mut code: int64;
+
+x = 0; y = 4; z = 8;
+
+if (x) {
+    code = 1;
+
 }
-elif(y) {
-    x = 2;
+elif (y) {
+    code = 2;
 }
-elif(z) {
-    x = 3;
+elif (z) {
+    code = 3;
 }
 else {
-    x = 4;
+    code = 4;
 }
 
-
-exit(x);
+exit(code);
