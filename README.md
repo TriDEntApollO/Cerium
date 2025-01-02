@@ -37,6 +37,21 @@ cmake --build build
 
 Executable will be `hydro` in the `build/` directory.
 
+# TODO
+
+#### Urgent
+
+- [ ] Imports
+- [ ] Main function
+- [ ] Macro definitions
+- [ ] Conditional logic
+  
+#### Others
+- [ ] More data types
+- [ ] Funtions and funtion calls
+- [ ] Better error messages from the compiler.
+
+
 </br>
 
 > [!NOTE]
