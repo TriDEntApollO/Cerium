@@ -1,5 +1,5 @@
 # Cerium
-Cerium is a compiler built in C++ for my own programming language that i am building to learn and unravel how compilers actually work under the hood. 
+Cerium my own hobby programming language that i am building to learn and unravel how compilers actually work under the hood. th compiler is built on C++ and is called *`cer`* for now.
 
 P.S. this project was acutally inspired by [hydrogen](https://github.com/orosmatthew/hydrogen-cpp) by [orosmatthew](https://github.com/orosmatthew).
 
@@ -35,7 +35,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-Executable will be `hydro` in the `build/` directory.
+Executable will be `cer` in the `build/` directory.
 
 # TODO
 
