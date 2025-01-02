@@ -1,3 +1,8 @@
+> [!CAUTION]
+> The latest commit for some reason has seg fault issue while trying to compile. Idk i prolly fucked up some file upload and one or more files are with old changes that I am currently unable to fix it due to my the SSD that had my Arch dev setup crashed on me.
+>
+> So untill I get a new SSD I am sadly unable to fix the issue ;(
+
 # Cerium
 Cerium my own hobby programming language that i am building to learn and unravel how compilers actually work under the hood. th compiler is built on C++ and is called *`cer`* for now.
 
