@@ -1,8 +1,3 @@
-> [!CAUTION]
-> The latest commit for some reason has seg fault issue while trying to compile. Idk i prolly fucked up some file upload and one or more files are with old changes that I am currently unable to fix it due to my the SSD that had my Arch dev setup crashed on me.
->
-> So untill I get a new SSD I am sadly unable to fix the issue ;(
-
 # Cerium
 Cerium my own hobby programming language that i am building to learn and unravel how compilers actually work under the hood. th compiler is built on C++ and is called *`cer`* for now.
 
@@ -48,7 +43,7 @@ Executable will be `cer` in the `build/` directory.
 
 - [ ] Imports
 - [ ] Main function
-- [ ] Macro definitions
+- [ ] Aliases
 - [ ] Conditional logic
   
 #### Others
@@ -61,4 +56,4 @@ Executable will be `cer` in the `build/` directory.
 
 > [!NOTE]
 >
-><p>This for now is a hobby project which migh change in the future >to an actual language but lets not get ahead of ourselves.</p>
+><p>This for now is a hobby project which might change in the future to an actual language but lets not get ahead of ourselves.</p>
