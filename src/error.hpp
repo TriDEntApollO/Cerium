@@ -17,6 +17,15 @@ inline void error_identifier(const std::string &filename, std::string message, T
     std::cerr << std::endl;
 }
 
+inline void error_token(const std::string &filename, std::string message, Token token, std::string token_name) {
+    error_flag = true;
+    int line = token.line_no;
+    int col = token.column_no;
+    std::cerr << "cer: error: " << message << std::endl;
+    std::cerr << filename << "::" << line << ":" << col << ": token '" << token_name << "'" << std::endl;
+    std::cerr << std::endl;
+}
+
 inline void error_expected(const std::string &filename, const std::string &message, Token &token) {
     error_flag = true;
     int line = token.line_no;

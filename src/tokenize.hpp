@@ -234,12 +234,14 @@ class Tokenizer {
 
                         case ' ':
                         case '\t':
+                        case '\r':
                             column_count++;
                             grab();
                             break;
 
                         default:
-                            std::cerr << "cer: error: invalid token" << std::endl;
+                            Token token = { .type = TokenType::identifier, .line_no = line_count, .column_no = column_count, .value = std::string(1, seek().value()) };
+                            error_token(m_filename, "unexpected character", token, std::string(1, seek().value()));
                             exit(EXIT_FAILURE);
                     }
                 }

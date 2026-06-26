@@ -1,0 +1,6 @@
+bin/
+build/
+.vscode/
+.idea/
+out
+test
